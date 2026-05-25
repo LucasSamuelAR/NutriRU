@@ -111,3 +111,12 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: #f9fafb;
+  color: #111827;
+}
