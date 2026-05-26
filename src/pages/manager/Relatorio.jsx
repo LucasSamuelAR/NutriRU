@@ -68,7 +68,7 @@ export default function Relatorio() {
         {/* Título e seletor */}
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Métricas e Resultados</h1>
+            <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Métricas e Resultados</h1>
             <p className="text-sm text-gray-500 mt-1">Acompanhamento de desperdício e satisfação</p>
           </div>
           <select

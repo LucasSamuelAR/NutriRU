@@ -1,31 +1,49 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Pencil, Trash2, Copy, CheckCircle, Clock, Beef, Leaf, UtensilsCrossed, Salad, Apple, X, Save } from "lucide-react";
 import LayoutGestor from "../../components/LayoutGestor";
+import { supabase } from "../../lib/supabase";
 
 const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-const cardapiosIniciais = {
-  "Seg-almoco": { status: "publicado", pratoPrincipal: "Iscas de Carne Acebolada", vegetariano: "Estrogonofe de Grão de Bico", acompanhamentos: "Arroz Integral, Feijão Preto, Purê de Batata", salada: "Mix de Folhas Verdes", sobremesa: "Laranja Fresca", ingredientes: "Carne bovina, cebola, alho, azeite, sal", calorias: 285, proteinas: 28, carboidratos: 12, gorduras: 14 },
-  "Seg-jantar": { status: "publicado", pratoPrincipal: "Frango Grelhado ao Limão", vegetariano: "Omelete de Legumes", acompanhamentos: "Arroz Branco, Feijão Carioca", salada: "Alface e Tomate", sobremesa: "Banana", ingredientes: "Frango, limão, alho, azeite, sal", calorias: 260, proteinas: 32, carboidratos: 8, gorduras: 10 },
-  "Ter-almoco": { status: "publicado", pratoPrincipal: "Carne Assada com Molho", vegetariano: "Tofu Grelhado", acompanhamentos: "Arroz, Feijão, Farofa", salada: "Rúcula e Cenoura", sobremesa: "Maçã", ingredientes: "Carne bovina, molho de tomate, cebola, alho", calorias: 320, proteinas: 30, carboidratos: 18, gorduras: 16 },
-  "Ter-jantar": { status: "rascunho", pratoPrincipal: "Peixe Grelhado", vegetariano: "Quiche de Legumes", acompanhamentos: "Arroz Integral, Legumes Refogados", salada: "Alface", sobremesa: "Mamão", ingredientes: "Peixe tilápia, limão, azeite, ervas", calorias: 220, proteinas: 35, carboidratos: 5, gorduras: 8 },
-  "Qua-almoco": { status: "rascunho", pratoPrincipal: "Frango à Parmegiana", vegetariano: "Berinjela à Parmegiana", acompanhamentos: "Macarrão ao Sugo, Arroz", salada: "Mix de Folhas", sobremesa: "Gelatina", ingredientes: "Frango, molho de tomate, queijo, farinha", calorias: 380, proteinas: 35, carboidratos: 28, gorduras: 18 },
-  "Qui-almoco": { status: "publicado", pratoPrincipal: "Bisteca Suína", vegetariano: "Feijão Tropeiro", acompanhamentos: "Arroz, Couve Refogada", salada: "Tomate e Pepino", sobremesa: "Melancia", ingredientes: "Bisteca suína, alho, sal, pimenta, azeite", calorias: 340, proteinas: 28, carboidratos: 10, gorduras: 20 },
-  "Sex-almoco": { status: "rascunho", pratoPrincipal: "Peixe ao Molho", vegetariano: "Polenta com Legumes", acompanhamentos: "Arroz, Feijão, Pirão", salada: "Salada Mista", sobremesa: "Abacaxi", ingredientes: "Peixe, molho de tomate, cebola, coentro", calorias: 240, proteinas: 30, carboidratos: 15, gorduras: 9 },
-};
-
-const formVazio = { pratoPrincipal: "", vegetariano: "", acompanhamentos: "", salada: "", sobremesa: "", ingredientes: "", calorias: "", proteinas: "", carboidratos: "", gorduras: "" };
+const formVazio = { pratoPrincipal: "", vegetariano: "", acompanhamentos: "", salada: "", sobremesa: "", calorias: "", proteinas: "", carboidratos: "", gorduras: "" };
 
 export default function Cardapio() {
   const [diaSelecionado, setDiaSelecionado] = useState("Seg");
   const [turno, setTurno] = useState("almoco");
-  const [cardapios, setCardapios] = useState(cardapiosIniciais);
+  const [cardapios, setCardapios] = useState({});
   const [toast, setToast] = useState(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(formVazio);
 
   const chave = `${diaSelecionado}-${turno}`;
   const cardapio = cardapios[chave];
+
+  useEffect(() => {
+    buscarCardapios();
+  }, []);
+
+  async function buscarCardapios() {
+    const { data, error } = await supabase.from("cardapios").select("*");
+    if (error) { console.error(error); return; }
+
+    const mapa = {};
+    data.forEach((item) => {
+      mapa[`${item.dia}-${item.turno}`] = {
+        id: item.id,
+        status: item.status,
+        pratoPrincipal: item.prato_principal,
+        vegetariano: item.vegetariano,
+        acompanhamentos: item.acompanhamentos,
+        salada: item.salada,
+        sobremesa: item.sobremesa,
+        calorias: item.calorias,
+        proteinas: item.proteinas,
+        carboidratos: item.carboidratos,
+        gorduras: item.gorduras,
+      };
+    });
+    setCardapios(mapa);
+  }
 
   function getStatus(dia) {
     const almoco = cardapios[`${dia}-almoco`];
@@ -40,16 +58,23 @@ export default function Cardapio() {
     setTimeout(() => setToast(null), 3000);
   }
 
-  function handlePublicar() {
+  async function handlePublicar() {
+    const { error } = await supabase
+      .from("cardapios")
+      .update({ status: "publicado" })
+      .eq("id", cardapio.id);
+    if (error) { console.error(error); return; }
     setCardapios((prev) => ({ ...prev, [chave]: { ...prev[chave], status: "publicado" } }));
     mostrarToast("Cardápio publicado! Notificação enviada para os estudantes.");
   }
 
-  function handleDuplicar() {
+  async function handleDuplicar() {
     mostrarToast("Cardápio duplicado como rascunho para a próxima semana.");
   }
 
-  function handleExcluir() {
+  async function handleExcluir() {
+    const { error } = await supabase.from("cardapios").delete().eq("id", cardapio.id);
+    if (error) { console.error(error); return; }
     setCardapios((prev) => { const novo = { ...prev }; delete novo[chave]; return novo; });
     mostrarToast("Cardápio excluído.");
   }
@@ -60,22 +85,58 @@ export default function Cardapio() {
   }
 
   function abrirEditar() {
-    setForm({ ...cardapio, calorias: cardapio.calorias?.toString(), proteinas: cardapio.proteinas?.toString(), carboidratos: cardapio.carboidratos?.toString(), gorduras: cardapio.gorduras?.toString() });
+    setForm({
+      pratoPrincipal: cardapio.pratoPrincipal,
+      vegetariano: cardapio.vegetariano,
+      acompanhamentos: cardapio.acompanhamentos,
+      salada: cardapio.salada,
+      sobremesa: cardapio.sobremesa,
+      calorias: cardapio.calorias?.toString(),
+      proteinas: cardapio.proteinas?.toString(),
+      carboidratos: cardapio.carboidratos?.toString(),
+      gorduras: cardapio.gorduras?.toString(),
+    });
     setModal(true);
   }
 
-  function handleSalvar() {
-    setCardapios((prev) => ({
-      ...prev,
-      [chave]: {
-        ...form,
+  async function handleSalvar() {
+    if (cardapio?.id) {
+      // Editar
+      const { error } = await supabase
+        .from("cardapios")
+        .update({
+          prato_principal: form.pratoPrincipal,
+          vegetariano: form.vegetariano,
+          acompanhamentos: form.acompanhamentos,
+          salada: form.salada,
+          sobremesa: form.sobremesa,
+          calorias: Number(form.calorias),
+          proteinas: Number(form.proteinas),
+          carboidratos: Number(form.carboidratos),
+          gorduras: Number(form.gorduras),
+        })
+        .eq("id", cardapio.id);
+      if (error) { console.error(error); return; }
+    } else {
+      // Novo
+      const { error } = await supabase.from("cardapios").insert({
+        dia: diaSelecionado,
+        turno,
         status: "rascunho",
+        prato_principal: form.pratoPrincipal,
+        vegetariano: form.vegetariano,
+        acompanhamentos: form.acompanhamentos,
+        salada: form.salada,
+        sobremesa: form.sobremesa,
         calorias: Number(form.calorias),
         proteinas: Number(form.proteinas),
         carboidratos: Number(form.carboidratos),
         gorduras: Number(form.gorduras),
-      },
-    }));
+      });
+      if (error) { console.error(error); return; }
+    }
+
+    await buscarCardapios();
     setModal(false);
     mostrarToast("Cardápio salvo como rascunho!");
   }
@@ -95,7 +156,7 @@ export default function Cardapio() {
         {/* Modal */}
         {modal && (
           <div className="fixed inset-0 z-40 flex items-end" style={{ backgroundColor: "rgba(0,0,0,0.4)" }}>
-            <div className="bg-white w-full rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto">
+            <div className="bg-white w-full rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto pb-8">
               <div className="flex items-center justify-between mb-5">
                 <p className="text-lg font-bold text-gray-900">
                   {cardapio ? "Editar Cardápio" : "Novo Cardápio"}
@@ -112,7 +173,6 @@ export default function Cardapio() {
                   { key: "acompanhamentos", label: "Acompanhamentos", placeholder: "Ex: Arroz, Feijão, Purê" },
                   { key: "salada", label: "Salada", placeholder: "Ex: Mix de Folhas Verdes" },
                   { key: "sobremesa", label: "Sobremesa", placeholder: "Ex: Laranja Fresca" },
-                  { key: "ingredientes", label: "Ingredientes do Prato Principal", placeholder: "Ex: Carne bovina, cebola, alho, azeite" },
                 ].map(({ key, label, placeholder }) => (
                   <div key={key}>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{label}</p>
@@ -166,8 +226,8 @@ export default function Cardapio() {
         {/* Título e botão novo */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Cardápios</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Outubro 2024</p>
+            <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Cardápios</h1>
+            <p className="text-sm text-gray-500 mt-0.5">{new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
           </div>
           <button
             onClick={abrirNovo}
