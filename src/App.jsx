@@ -8,6 +8,7 @@ import Painel from "./pages/manager/Painel";
 import Cardapio from "./pages/manager/Cardapio";
 import Producao from "./pages/manager/Producao";
 import Relatorio from "./pages/manager/Relatorio";
+import Configuracoes from "./pages/manager/Configuracoes";
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
         <Route path="/cardapio" element={<Cardapio />} />
         <Route path="/producao" element={<Producao />} />
         <Route path="/relatorio" element={<Relatorio />} />
+        <Route path="/configuracoes" element={<Configuracoes />} />
       </Routes>
     </BrowserRouter>
   );

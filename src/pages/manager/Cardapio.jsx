@@ -5,7 +5,7 @@ import { supabase } from "../../lib/supabase";
 
 const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
-const formVazio = { pratoPrincipal: "", vegetariano: "", acompanhamentos: "", salada: "", sobremesa: "", calorias: "", proteinas: "", carboidratos: "", gorduras: "" };
+const formVazio = { pratoPrincipal: "", vegetariano: "", acompanhamentos: "", salada: "", sobremesa: "", kcalPrincipal: "", kcalVegetal: "", kcalAcomp: "", kcalSalada: "", kcalSobremesa: "" };
 
 export default function Cardapio() {
   const [diaSelecionado, setDiaSelecionado] = useState("Seg");
@@ -36,10 +36,11 @@ export default function Cardapio() {
         acompanhamentos: item.acompanhamentos,
         salada: item.salada,
         sobremesa: item.sobremesa,
-        calorias: item.calorias,
-        proteinas: item.proteinas,
-        carboidratos: item.carboidratos,
-        gorduras: item.gorduras,
+        kcalPrincipal: item.kcal_principal,
+        kcalVegetal: item.kcal_vegetal,
+        kcalAcomp: item.kcal_acomp,
+        kcalSalada: item.kcal_salada,
+        kcalSobremesa: item.kcal_sobremesa,
       };
     });
     setCardapios(mapa);
@@ -91,48 +92,34 @@ export default function Cardapio() {
       acompanhamentos: cardapio.acompanhamentos,
       salada: cardapio.salada,
       sobremesa: cardapio.sobremesa,
-      calorias: cardapio.calorias?.toString(),
-      proteinas: cardapio.proteinas?.toString(),
-      carboidratos: cardapio.carboidratos?.toString(),
-      gorduras: cardapio.gorduras?.toString(),
+      kcalPrincipal: cardapio.kcalPrincipal?.toString(),
+      kcalVegetal: cardapio.kcalVegetal?.toString(),
+      kcalAcomp: cardapio.kcalAcomp?.toString(),
+      kcalSalada: cardapio.kcalSalada?.toString(),
+      kcalSobremesa: cardapio.kcalSobremesa?.toString(),
     });
     setModal(true);
   }
 
   async function handleSalvar() {
+    const payload = {
+      prato_principal: form.pratoPrincipal,
+      vegetariano: form.vegetariano,
+      acompanhamentos: form.acompanhamentos,
+      salada: form.salada,
+      sobremesa: form.sobremesa,
+      kcal_principal: Number(form.kcalPrincipal),
+      kcal_vegetal: Number(form.kcalVegetal),
+      kcal_acomp: Number(form.kcalAcomp),
+      kcal_salada: Number(form.kcalSalada),
+      kcal_sobremesa: Number(form.kcalSobremesa),
+    };
+
     if (cardapio?.id) {
-      // Editar
-      const { error } = await supabase
-        .from("cardapios")
-        .update({
-          prato_principal: form.pratoPrincipal,
-          vegetariano: form.vegetariano,
-          acompanhamentos: form.acompanhamentos,
-          salada: form.salada,
-          sobremesa: form.sobremesa,
-          calorias: Number(form.calorias),
-          proteinas: Number(form.proteinas),
-          carboidratos: Number(form.carboidratos),
-          gorduras: Number(form.gorduras),
-        })
-        .eq("id", cardapio.id);
+      const { error } = await supabase.from("cardapios").update(payload).eq("id", cardapio.id);
       if (error) { console.error(error); return; }
     } else {
-      // Novo
-      const { error } = await supabase.from("cardapios").insert({
-        dia: diaSelecionado,
-        turno,
-        status: "rascunho",
-        prato_principal: form.pratoPrincipal,
-        vegetariano: form.vegetariano,
-        acompanhamentos: form.acompanhamentos,
-        salada: form.salada,
-        sobremesa: form.sobremesa,
-        calorias: Number(form.calorias),
-        proteinas: Number(form.proteinas),
-        carboidratos: Number(form.carboidratos),
-        gorduras: Number(form.gorduras),
-      });
+      const { error } = await supabase.from("cardapios").insert({ ...payload, dia: diaSelecionado, turno, status: "rascunho" });
       if (error) { console.error(error); return; }
     }
 
@@ -168,47 +155,32 @@ export default function Cardapio() {
 
               <div className="space-y-4">
                 {[
-                  { key: "pratoPrincipal", label: "Prato Principal", placeholder: "Ex: Iscas de Carne Acebolada" },
-                  { key: "vegetariano", label: "Opção Vegetariana", placeholder: "Ex: Estrogonofe de Grão de Bico" },
-                  { key: "acompanhamentos", label: "Acompanhamentos", placeholder: "Ex: Arroz, Feijão, Purê" },
-                  { key: "salada", label: "Salada", placeholder: "Ex: Mix de Folhas Verdes" },
-                  { key: "sobremesa", label: "Sobremesa", placeholder: "Ex: Laranja Fresca" },
-                ].map(({ key, label, placeholder }) => (
+                  { key: "pratoPrincipal", label: "Prato Principal", placeholder: "Ex: Iscas de Carne Acebolada", kcalKey: "kcalPrincipal" },
+                  { key: "vegetariano", label: "Opção Vegetariana", placeholder: "Ex: Estrogonofe de Grão de Bico", kcalKey: "kcalVegetal" },
+                  { key: "acompanhamentos", label: "Acompanhamentos", placeholder: "Ex: Arroz, Feijão, Purê", kcalKey: "kcalAcomp" },
+                  { key: "salada", label: "Salada", placeholder: "Ex: Mix de Folhas Verdes", kcalKey: "kcalSalada" },
+                  { key: "sobremesa", label: "Sobremesa", placeholder: "Ex: Laranja Fresca", kcalKey: "kcalSobremesa" },
+                ].map(({ key, label, placeholder, kcalKey }) => (
                   <div key={key}>
                     <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{label}</p>
-                    <input
-                      type="text"
-                      value={form[key]}
-                      onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                      placeholder={placeholder}
-                      className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={form[key]}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                        placeholder={placeholder}
+                        className="flex-1 bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
+                      />
+                      <input
+                        type="number"
+                        value={form[kcalKey]}
+                        onChange={(e) => setForm((prev) => ({ ...prev, [kcalKey]: e.target.value }))}
+                        placeholder="kcal"
+                        className="w-20 bg-gray-50 rounded-2xl px-3 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200 text-center"
+                      />
+                    </div>
                   </div>
                 ))}
-
-                {/* Valores nutricionais */}
-                <div>
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Valores Nutricionais</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {[
-                      { key: "calorias", label: "Calorias (kcal)" },
-                      { key: "proteinas", label: "Proteínas (g)" },
-                      { key: "carboidratos", label: "Carboidratos (g)" },
-                      { key: "gorduras", label: "Gorduras (g)" },
-                    ].map(({ key, label }) => (
-                      <div key={key}>
-                        <p className="text-xs text-gray-400 mb-1">{label}</p>
-                        <input
-                          type="number"
-                          value={form[key]}
-                          onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
-                          placeholder="0"
-                          className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
                 <button
                   onClick={handleSalvar}
@@ -289,55 +261,38 @@ export default function Cardapio() {
 
             <div className="p-4 space-y-3">
               {[
-                { icon: <Beef size={15} className="text-orange-500" />, bg: "bg-orange-50", label: "Prato Principal", valor: cardapio.pratoPrincipal },
-                { icon: <Leaf size={15} className="text-green-600" />, bg: "bg-green-50", label: "Opção Vegetariana", valor: cardapio.vegetariano },
-                { icon: <UtensilsCrossed size={15} className="text-green-700" />, bg: "bg-green-50", label: "Acompanhamentos", valor: cardapio.acompanhamentos },
-              ].map(({ icon, bg, label, valor }) => (
+                { icon: <Beef size={15} className="text-orange-500" />, bg: "bg-orange-50", label: "Prato Principal", valor: cardapio.pratoPrincipal, kcal: cardapio.kcalPrincipal },
+                { icon: <Leaf size={15} className="text-green-600" />, bg: "bg-green-50", label: "Opção Vegetariana", valor: cardapio.vegetariano, kcal: cardapio.kcalVegetal },
+                { icon: <UtensilsCrossed size={15} className="text-green-700" />, bg: "bg-green-50", label: "Acompanhamentos", valor: cardapio.acompanhamentos, kcal: cardapio.kcalAcomp },
+              ].map(({ icon, bg, label, valor, kcal }) => (
                 <div key={label} className="flex items-start gap-3">
                   <div className={`w-8 h-8 ${bg} rounded-xl flex items-center justify-center flex-shrink-0`}>{icon}</div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{label}</p>
                     <p className="text-sm font-semibold text-gray-900">{valor}</p>
                   </div>
+                  {kcal && <span className="bg-gray-100 text-gray-500 text-xs font-medium px-2 py-1 rounded-lg flex-shrink-0">{kcal} kcal</span>}
                 </div>
               ))}
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex items-start gap-2">
                   <div className="w-8 h-8 bg-green-50 rounded-xl flex items-center justify-center flex-shrink-0"><Salad size={15} className="text-green-600" /></div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Salada</p>
                     <p className="text-sm font-semibold text-gray-900">{cardapio.salada}</p>
+                    {cardapio.kcalSalada && <span className="text-xs text-gray-400">{cardapio.kcalSalada} kcal</span>}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center flex-shrink-0"><Apple size={15} className="text-orange-400" /></div>
-                  <div>
+                  <div className="flex-1">
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Sobremesa</p>
                     <p className="text-sm font-semibold text-gray-900">{cardapio.sobremesa}</p>
+                    {cardapio.kcalSobremesa && <span className="text-xs text-gray-400">{cardapio.kcalSobremesa} kcal</span>}
                   </div>
                 </div>
               </div>
-
-              {/* Valores nutricionais */}
-              {cardapio.calorias && (
-                <div className="bg-gray-50 rounded-2xl p-3 mt-2">
-                  <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Valores Nutricionais</p>
-                  <div className="grid grid-cols-4 gap-2 text-center">
-                    {[
-                      { label: "Kcal", valor: cardapio.calorias },
-                      { label: "Prot", valor: `${cardapio.proteinas}g` },
-                      { label: "Carb", valor: `${cardapio.carboidratos}g` },
-                      { label: "Gord", valor: `${cardapio.gorduras}g` },
-                    ].map(({ label, valor }) => (
-                      <div key={label}>
-                        <p className="text-xs text-gray-400">{label}</p>
-                        <p className="text-sm font-bold text-gray-900">{valor}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
 
             <div className="px-4 pb-4 flex gap-2">
