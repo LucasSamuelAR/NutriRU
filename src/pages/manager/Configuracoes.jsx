@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Save, Clock, CheckCircle, AlertCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import LayoutGestor from "../../components/LayoutGestor";
 import { supabase } from "../../lib/supabase";
 
@@ -18,13 +19,16 @@ const camposJantar = [
 ];
 
 export default function Configuracoes() {
+  const navigate = useNavigate();
+
   const [form, setForm] = useState({
     almoco_abertura: "", almoco_fechamento: "",
     jantar_abertura: "", jantar_fechamento: "",
     intencao_almoco_inicio: "", intencao_almoco_limite: "",
     intencao_jantar_inicio: "", intencao_jantar_limite: "",
+    meta_almoco: "", meta_jantar: "",
   });
-  const [toast, setToast] = useState(null); // { tipo: "sucesso" | "erro", msg: string }
+  const [toast, setToast] = useState(null);
   const [loading, setLoading] = useState(true);
   const configIdRef = useRef(null);
 
@@ -41,8 +45,9 @@ export default function Configuracoes() {
         intencao_almoco_limite: data.intencao_almoco_limite?.slice(0, 5) || "",
         intencao_jantar_inicio: data.intencao_jantar_inicio?.slice(0, 5) || "",
         intencao_jantar_limite: data.intencao_jantar_limite?.slice(0, 5) || "",
+        meta_almoco: data.meta_almoco ?? 500,
+        meta_jantar: data.meta_jantar ?? 300,
       });
-      // Salva o objeto completo do banco (com id e formato original) no cache
       localStorage.setItem("ru_config", JSON.stringify(data));
       setLoading(false);
     });
@@ -51,7 +56,6 @@ export default function Configuracoes() {
   async function handleSalvar() {
     if (!configIdRef.current) { console.error("ID não encontrado"); return; }
 
-    // Garante formato HH:MM:SS que o Postgres espera para o tipo time
     const payload = {
       almoco_abertura:        form.almoco_abertura        ? form.almoco_abertura        + ":00" : null,
       almoco_fechamento:      form.almoco_fechamento      ? form.almoco_fechamento      + ":00" : null,
@@ -61,6 +65,8 @@ export default function Configuracoes() {
       intencao_almoco_limite: form.intencao_almoco_limite ? form.intencao_almoco_limite + ":00" : null,
       intencao_jantar_inicio: form.intencao_jantar_inicio ? form.intencao_jantar_inicio + ":00" : null,
       intencao_jantar_limite: form.intencao_jantar_limite ? form.intencao_jantar_limite + ":00" : null,
+      meta_almoco: Number(form.meta_almoco) || 500,
+      meta_jantar: Number(form.meta_jantar) || 300,
     };
 
     const { data: updated, error } = await supabase
@@ -77,10 +83,12 @@ export default function Configuracoes() {
       return;
     }
 
-    // Atualiza o cache com o objeto retornado pelo banco (formato original, com id)
     localStorage.setItem("ru_config", JSON.stringify(updated));
     setToast({ tipo: "sucesso", msg: "Configurações salvas com sucesso!" });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => {
+      setToast(null);
+      navigate("/painel");
+    }, 2000);
   }
 
   if (loading) return (
@@ -110,6 +118,7 @@ export default function Configuracoes() {
           <p className="text-sm text-gray-500 mt-0.5">Horários de funcionamento do RU</p>
         </div>
 
+        {/* ALMOÇO */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-green-50 rounded-xl flex items-center justify-center">
@@ -128,8 +137,22 @@ export default function Configuracoes() {
               />
             </div>
           ))}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Meta de Refeições</p>
+            <div className="bg-gray-50 rounded-2xl px-4 py-3 flex items-center justify-between border border-transparent focus-within:border-green-200">
+              <input
+                type="number"
+                value={form.meta_almoco}
+                onChange={(e) => setForm((prev) => ({ ...prev, meta_almoco: e.target.value }))}
+                className="bg-transparent outline-none text-sm text-gray-900 font-medium w-full"
+                placeholder="500"
+              />
+              <span className="text-xs text-gray-400 ml-2">refeições</span>
+            </div>
+          </div>
         </div>
 
+        {/* JANTAR */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center">
@@ -148,6 +171,19 @@ export default function Configuracoes() {
               />
             </div>
           ))}
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">Meta de Refeições</p>
+            <div className="bg-gray-50 rounded-2xl px-4 py-3 flex items-center justify-between border border-transparent focus-within:border-orange-200">
+              <input
+                type="number"
+                value={form.meta_jantar}
+                onChange={(e) => setForm((prev) => ({ ...prev, meta_jantar: e.target.value }))}
+                className="bg-transparent outline-none text-sm text-gray-900 font-medium w-full"
+                placeholder="300"
+              />
+              <span className="text-xs text-gray-400 ml-2">refeições</span>
+            </div>
+          </div>
         </div>
 
         <button

@@ -7,10 +7,23 @@ const dias = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
 
 const formVazio = { pratoPrincipal: "", vegetariano: "", acompanhamentos: "", salada: "", sobremesa: "", kcalPrincipal: "", kcalVegetal: "", kcalAcomp: "", kcalSalada: "", kcalSobremesa: "" };
 
+function carregarCache() {
+  try {
+    const raw = localStorage.getItem("ru_cardapios_gestor");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function salvarCache(mapa) {
+  localStorage.setItem("ru_cardapios_gestor", JSON.stringify(mapa));
+}
+
 export default function Cardapio() {
   const [diaSelecionado, setDiaSelecionado] = useState("Seg");
   const [turno, setTurno] = useState("almoco");
-  const [cardapios, setCardapios] = useState({});
+  const [cardapios, setCardapios] = useState(() => carregarCache());
   const [toast, setToast] = useState(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(formVazio);
@@ -44,6 +57,7 @@ export default function Cardapio() {
       };
     });
     setCardapios(mapa);
+    salvarCache(mapa);
   }
 
   function getStatus(dia) {
@@ -60,13 +74,12 @@ export default function Cardapio() {
   }
 
   async function handlePublicar() {
-    const { error } = await supabase
-      .from("cardapios")
-      .update({ status: "publicado" })
-      .eq("id", cardapio.id);
+    const { error } = await supabase.from("cardapios").update({ status: "publicado" }).eq("id", cardapio.id);
     if (error) { console.error(error); return; }
-    setCardapios((prev) => ({ ...prev, [chave]: { ...prev[chave], status: "publicado" } }));
-    mostrarToast("Cardápio publicado! Notificação enviada para os estudantes.");
+    const novo = { ...cardapios, [chave]: { ...cardapios[chave], status: "publicado" } };
+    setCardapios(novo);
+    salvarCache(novo);
+    mostrarToast("Cardápio publicado!");
   }
 
   async function handleDuplicar() {
@@ -76,7 +89,10 @@ export default function Cardapio() {
   async function handleExcluir() {
     const { error } = await supabase.from("cardapios").delete().eq("id", cardapio.id);
     if (error) { console.error(error); return; }
-    setCardapios((prev) => { const novo = { ...prev }; delete novo[chave]; return novo; });
+    const novo = { ...cardapios };
+    delete novo[chave];
+    setCardapios(novo);
+    salvarCache(novo);
     mostrarToast("Cardápio excluído.");
   }
 
@@ -195,17 +211,13 @@ export default function Cardapio() {
           </div>
         )}
 
-        {/* Título e botão novo */}
+        {/* Título */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Cardápios</h1>
             <p className="text-sm text-gray-500 mt-0.5">{new Date().toLocaleDateString("pt-BR", { month: "long", year: "numeric" })}</p>
           </div>
-          <button
-            onClick={abrirNovo}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-sm font-semibold"
-            style={{ backgroundColor: "#ea580c" }}
-          >
+          <button onClick={abrirNovo} className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white text-sm font-semibold" style={{ backgroundColor: "#ea580c" }}>
             <Plus size={16} />
             Novo
           </button>
