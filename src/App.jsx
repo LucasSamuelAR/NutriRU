@@ -9,6 +9,8 @@ import Cardapio from "./pages/manager/Cardapio";
 import Producao from "./pages/manager/Producao";
 import Relatorio from "./pages/manager/Relatorio";
 import Configuracoes from "./pages/manager/Configuracoes";
+import LoginForm from "./pages/auth/LoginForm";   
+import Cadastro  from "./pages/auth/Cadastro";
 
 function App() {
   return (
@@ -25,6 +27,8 @@ function App() {
         <Route path="/producao" element={<Producao />} />
         <Route path="/relatorio" element={<Relatorio />} />
         <Route path="/configuracoes" element={<Configuracoes />} />
+        <Route path="/login-form" element={<LoginForm />} />
+        <Route path="/cadastro" element={<Cadastro />} />
       </Routes>
     </BrowserRouter>
   );

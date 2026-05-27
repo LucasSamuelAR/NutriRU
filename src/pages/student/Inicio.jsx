@@ -12,7 +12,9 @@ const categoriaConfig = {
   "SOBREMESA & SALADA": { bg: "bg-green-50",  text: "text-green-600" },
 };
 
-const matricula = "20241234";
+const usuario = JSON.parse(localStorage.getItem("ru_usuario") || "{}");
+const matricula = usuario.matricula || "20241234";
+const nomeUsuario = usuario.nome || "Estudante";
 
 function horaParaDecimal(str) {
   if (!str) return null;
@@ -268,7 +270,7 @@ export default function Inicio() {
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Olá, Mariana!</h1>
+            <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Olá, {nomeUsuario}!</h1>
             <p className="text-sm text-gray-500 capitalize">{dataFormatada}</p>
           </div>
           <span className={`flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full border ${ruAberto ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-50 text-gray-500 border-gray-200"}`}>
