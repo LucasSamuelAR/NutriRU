@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Save, Clock, CheckCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Save, Clock, CheckCircle, AlertCircle } from "lucide-react";
 import LayoutGestor from "../../components/LayoutGestor";
 import { supabase } from "../../lib/supabase";
 
@@ -19,59 +19,68 @@ const camposJantar = [
 
 export default function Configuracoes() {
   const [form, setForm] = useState({
-    almoco_abertura: "",
-    almoco_fechamento: "",
-    jantar_abertura: "",
-    jantar_fechamento: "",
-    intencao_almoco_inicio: "",
-    intencao_almoco_limite: "",
-    intencao_jantar_inicio: "",
-    intencao_jantar_limite: "",
+    almoco_abertura: "", almoco_fechamento: "",
+    jantar_abertura: "", jantar_fechamento: "",
+    intencao_almoco_inicio: "", intencao_almoco_limite: "",
+    intencao_jantar_inicio: "", intencao_jantar_limite: "",
   });
-  const [id, setId] = useState(null);
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useState(null); // { tipo: "sucesso" | "erro", msg: string }
   const [loading, setLoading] = useState(true);
+  const configIdRef = useRef(null);
 
   useEffect(() => {
-    buscarConfiguracoes();
+    supabase.from("configuracoes").select("*").limit(1).single().then(({ data, error }) => {
+      if (error) { console.error(error); setLoading(false); return; }
+      configIdRef.current = data.id;
+      setForm({
+        almoco_abertura:        data.almoco_abertura?.slice(0, 5)        || "",
+        almoco_fechamento:      data.almoco_fechamento?.slice(0, 5)      || "",
+        jantar_abertura:        data.jantar_abertura?.slice(0, 5)        || "",
+        jantar_fechamento:      data.jantar_fechamento?.slice(0, 5)      || "",
+        intencao_almoco_inicio: data.intencao_almoco_inicio?.slice(0, 5) || "",
+        intencao_almoco_limite: data.intencao_almoco_limite?.slice(0, 5) || "",
+        intencao_jantar_inicio: data.intencao_jantar_inicio?.slice(0, 5) || "",
+        intencao_jantar_limite: data.intencao_jantar_limite?.slice(0, 5) || "",
+      });
+      // Salva o objeto completo do banco (com id e formato original) no cache
+      localStorage.setItem("ru_config", JSON.stringify(data));
+      setLoading(false);
+    });
   }, []);
 
-  async function buscarConfiguracoes() {
-    const { data, error } = await supabase.from("configuracoes").select("*").limit(1).single();
-    if (error) { console.error(error); setLoading(false); return; }
-    setId(data.id);
-    setForm({
-      almoco_abertura:        data.almoco_abertura?.slice(0, 5) || "",
-      almoco_fechamento:      data.almoco_fechamento?.slice(0, 5) || "",
-      jantar_abertura:        data.jantar_abertura?.slice(0, 5) || "",
-      jantar_fechamento:      data.jantar_fechamento?.slice(0, 5) || "",
-      intencao_almoco_inicio: data.intencao_almoco_inicio?.slice(0, 5) || "",
-      intencao_almoco_limite: data.intencao_almoco_limite?.slice(0, 5) || "",
-      intencao_jantar_inicio: data.intencao_jantar_inicio?.slice(0, 5) || "",
-      intencao_jantar_limite: data.intencao_jantar_limite?.slice(0, 5) || "",
-    });
-    setLoading(false);
-  }
-
   async function handleSalvar() {
-    const { error } = await supabase.from("configuracoes").update(form).eq("id", id);
-    if (error) { console.error(error); return; }
-    setToast("Configurações salvas com sucesso!");
-    setTimeout(() => setToast(null), 3000);
-  }
+    if (!configIdRef.current) { console.error("ID não encontrado"); return; }
 
-  function Campo({ campo }) {
-    return (
-      <div>
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{campo.label}</p>
-        <input
-          type="time"
-          value={form[campo.key]}
-          onChange={(e) => setForm((prev) => ({ ...prev, [campo.key]: e.target.value }))}
-          className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
-        />
-      </div>
-    );
+    // Garante formato HH:MM:SS que o Postgres espera para o tipo time
+    const payload = {
+      almoco_abertura:        form.almoco_abertura        ? form.almoco_abertura        + ":00" : null,
+      almoco_fechamento:      form.almoco_fechamento      ? form.almoco_fechamento      + ":00" : null,
+      jantar_abertura:        form.jantar_abertura        ? form.jantar_abertura        + ":00" : null,
+      jantar_fechamento:      form.jantar_fechamento      ? form.jantar_fechamento      + ":00" : null,
+      intencao_almoco_inicio: form.intencao_almoco_inicio ? form.intencao_almoco_inicio + ":00" : null,
+      intencao_almoco_limite: form.intencao_almoco_limite ? form.intencao_almoco_limite + ":00" : null,
+      intencao_jantar_inicio: form.intencao_jantar_inicio ? form.intencao_jantar_inicio + ":00" : null,
+      intencao_jantar_limite: form.intencao_jantar_limite ? form.intencao_jantar_limite + ":00" : null,
+    };
+
+    const { data: updated, error } = await supabase
+      .from("configuracoes")
+      .update(payload)
+      .eq("id", configIdRef.current)
+      .select()
+      .single();
+
+    if (error) {
+      console.error("Erro ao salvar:", error);
+      setToast({ tipo: "erro", msg: "Erro ao salvar. Tente novamente." });
+      setTimeout(() => setToast(null), 3000);
+      return;
+    }
+
+    // Atualiza o cache com o objeto retornado pelo banco (formato original, com id)
+    localStorage.setItem("ru_config", JSON.stringify(updated));
+    setToast({ tipo: "sucesso", msg: "Configurações salvas com sucesso!" });
+    setTimeout(() => setToast(null), 3000);
   }
 
   if (loading) return (
@@ -86,21 +95,21 @@ export default function Configuracoes() {
     <LayoutGestor titulo="Configurações" ativo="configuracoes">
       <div className="space-y-4 pb-4">
 
-        {/* Toast */}
         {toast && (
-          <div className="fixed top-4 left-4 right-4 z-50 px-4 py-3 rounded-2xl text-white text-sm font-semibold shadow-lg flex items-center gap-2" style={{ backgroundColor: "#166534" }}>
-            <CheckCircle size={16} />
-            {toast}
+          <div
+            className="fixed top-4 left-4 right-4 z-50 px-4 py-3 rounded-2xl text-white text-sm font-semibold shadow-lg flex items-center gap-2"
+            style={{ backgroundColor: toast.tipo === "sucesso" ? "#166534" : "#dc2626" }}
+          >
+            {toast.tipo === "sucesso" ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+            {toast.msg}
           </div>
         )}
 
-        {/* Título */}
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>Configurações</h1>
           <p className="text-sm text-gray-500 mt-0.5">Horários de funcionamento do RU</p>
         </div>
 
-        {/* Almoço */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-green-50 rounded-xl flex items-center justify-center">
@@ -108,10 +117,19 @@ export default function Configuracoes() {
             </div>
             <p className="text-sm font-bold text-gray-900">Almoço</p>
           </div>
-          {camposAlmoco.map((campo) => <Campo key={campo.key} campo={campo} />)}
+          {camposAlmoco.map(({ key, label }) => (
+            <div key={key}>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{label}</p>
+              <input
+                type="time"
+                value={form[key]}
+                onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
+              />
+            </div>
+          ))}
         </div>
 
-        {/* Jantar */}
         <div className="bg-white rounded-2xl p-4 shadow-sm space-y-4">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-orange-50 rounded-xl flex items-center justify-center">
@@ -119,10 +137,19 @@ export default function Configuracoes() {
             </div>
             <p className="text-sm font-bold text-gray-900">Jantar</p>
           </div>
-          {camposJantar.map((campo) => <Campo key={campo.key} campo={campo} />)}
+          {camposJantar.map(({ key, label }) => (
+            <div key={key}>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-widest mb-1.5">{label}</p>
+              <input
+                type="time"
+                value={form[key]}
+                onChange={(e) => setForm((prev) => ({ ...prev, [key]: e.target.value }))}
+                className="w-full bg-gray-50 rounded-2xl px-4 py-3 text-sm text-gray-900 outline-none border border-transparent focus:border-green-200"
+              />
+            </div>
+          ))}
         </div>
 
-        {/* Botão salvar */}
         <button
           onClick={handleSalvar}
           className="w-full py-4 rounded-2xl text-white font-bold text-base flex items-center justify-center gap-2"
