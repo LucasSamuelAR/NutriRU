@@ -1,285 +1,208 @@
 import { useState, useEffect } from "react";
-import { Star, CheckSquare, Square } from "lucide-react";
+import { Star, CheckSquare, Square, CheckCircle } from "lucide-react";
 import Layout from "../../components/Layout";
 import { supabase } from "../../lib/supabase";
 
-const criterios = [
-  { key: "sabor", label: "Sabor da Comida" },
+const matricula = "20241234";
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
+const CRITERIOS = [
+  { key: "sabor",       label: "Sabor da Comida" },
   { key: "temperatura", label: "Temperatura dos Pratos" },
-  { key: "saciedade", label: "Saciedade" },
-  { key: "satisfacao", label: "Satisfação Geral" },
+  { key: "saciedade",   label: "Saciedade" },
+  { key: "satisfacao",  label: "Satisfação Geral" },
 ];
 
 const PRATO_LABELS = {
   prato_principal: "Prato Principal",
-  vegetariano: "Opção Vegetariana",
+  vegetariano:     "Opção Vegetariana",
   acompanhamentos: "Acompanhamentos",
-  salada: "Salada",
-  sobremesa: "Sobremesa",
+  salada:          "Salada",
+  sobremesa:       "Sobremesa",
 };
 
-const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
-
-function getDiaSemanaAtual() {
-  return DIAS_SEMANA[new Date().getDay()];
+function toMin(time) {
+  if (!time) return 0;
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
 }
 
-// Retorna "almoco" ou "jantar" — igual ao que a intenção salva
-function getTurnoAtual() {
-  const h = new Date().getHours();
-  if (h >= 11 && h < 15) return "almoco";
-  if (h >= 17 && h < 21) return "jantar";
-  return null;
+function turnoLabel(t) {
+  return t === "almoco" ? "Almoço" : "Jantar";
 }
 
-function getTurnoLabel(turno) {
-  return turno === "almoco" ? "Almoço" : "Jantar";
+function Bloqueio({ emoji, titulo, descricao }) {
+  return (
+    <div className="bg-white rounded-2xl p-8 shadow-sm text-center space-y-2">
+      <p className="text-2xl">{emoji}</p>
+      <p className="text-sm font-semibold text-gray-500">{titulo}</p>
+      <p className="text-xs text-gray-400">{descricao}</p>
+    </div>
+  );
 }
-
-const matricula = "20241234"; // igual à página de intenção
 
 export default function Avaliacao() {
-  const [cardapio, setCardapio] = useState(null);
-  const [intencaoConfirmada, setIntencaoConfirmada] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [pratosSelecionados, setPratosSelecionados] = useState([]);
-  const [notas, setNotas] = useState({ sabor: 0, temperatura: 0, saciedade: 0, satisfacao: 0 });
-  const [enviando, setEnviando] = useState(false);
-  const [enviado, setEnviado] = useState(false);
-  const [erro, setErro] = useState(null);
-
-  const turnoAtual = getTurnoAtual();
-  const diaAtual = getDiaSemanaAtual();
+  const diaAtual = DIAS_SEMANA[new Date().getDay()];
   const dataHoje = new Date().toISOString().split("T")[0];
+  const agoraMin = new Date().getHours() * 60 + new Date().getMinutes();
 
-  useEffect(() => {
-    if (!turnoAtual) { setLoading(false); return; }
-    Promise.all([fetchCardapio(), fetchIntencao()]).finally(() => setLoading(false));
-  }, []);
+  const [loading,            setLoading]            = useState(true);
+  const [turnoAtual,         setTurnoAtual]         = useState(null);
+  const [cardapio,           setCardapio]           = useState(null);
+  const [intencaoConfirmada, setIntencaoConfirmada] = useState(null);
+  const [avaliados,          setAvaliados]          = useState([]);
+  const [pratosSelecionados, setPratosSelecionados] = useState([]);
+  const [notas,              setNotas]              = useState({ sabor: 0, temperatura: 0, saciedade: 0, satisfacao: 0 });
+  const [enviando,           setEnviando]           = useState(false);
+  const [erro,               setErro]               = useState(null);
+  const [sucesso,            setSucesso]            = useState(false);
 
-  async function fetchCardapio() {
-    const { data } = await supabase
-      .from("cardapios")
-      .select("*")
-      .eq("dia", diaAtual)
-      .eq("turno", turnoAtual) // "almoco" ou "jantar"
-      .eq("status", "publicado")
-      .limit(1)
-      .single();
+  useEffect(() => { iniciar(); }, []);
 
-    setCardapio(data || null);
+  async function iniciar() {
+    const { data: cfg } = await supabase.from("configuracoes").select("*").limit(1).single();
+    if (!cfg) { setLoading(false); return; }
+
+    let turno = null;
+    if (agoraMin >= toMin(cfg.almoco_abertura) && agoraMin <= toMin(cfg.almoco_fechamento)) turno = "almoco";
+    if (agoraMin >= toMin(cfg.jantar_abertura) && agoraMin <= toMin(cfg.jantar_fechamento)) turno = "jantar";
+    setTurnoAtual(turno);
+
+    if (!turno) { setLoading(false); return; }
+
+    const [cardapioRes, intencaoRes, avaliacoesRes] = await Promise.all([
+      supabase.from("cardapios").select("*").eq("dia", diaAtual).eq("turno", turno).eq("status", "publicado").limit(1).single(),
+      localStorage.getItem(`presenca_${turno}`) === "true"
+        ? Promise.resolve({ data: true })
+        : supabase.from("meal_intentions").select("id").eq("matricula", matricula).eq("refeicao", turno).eq("data", dataHoje).eq("confirmado", true).limit(1).single(),
+      supabase.from("avaliacoes").select("prato").eq("matricula", matricula).eq("turno", turno).eq("data", dataHoje),
+    ]);
+
+    setCardapio(cardapioRes.data || null);
+    setIntencaoConfirmada(!!(intencaoRes.data === true || (!intencaoRes.error && !!intencaoRes.data)));
+    if (avaliacoesRes.data) setAvaliados(avaliacoesRes.data.map((i) => i.prato));
+
+    setLoading(false);
   }
-
-  async function fetchIntencao() {
-    // Tenta primeiro pelo localStorage (já confirmado na outra tela)
-    const cachedKey = `presenca_${turnoAtual}`;
-    const cached = localStorage.getItem(cachedKey);
-
-    if (cached === "true") {
-      setIntencaoConfirmada(true);
-      return;
-    }
-
-    // Fallback: consulta o banco diretamente
-    const { data, error } = await supabase
-      .from("meal_intentions")
-      .select("id")
-      .eq("matricula", matricula)
-      .eq("refeicao", turnoAtual) // "almoco" ou "jantar" — igual ao que intenção salva
-      .eq("data", dataHoje)
-      .eq("confirmado", true)
-      .limit(1)
-      .single();
-
-    setIntencaoConfirmada(!error && !!data);
-  }
-
-  function togglePrato(prato) {
-    setPratosSelecionados((prev) =>
-      prev.includes(prato) ? prev.filter((p) => p !== prato) : [...prev, prato]
-    );
-  }
-
-  function setNota(key, valor) {
-    setNotas((prev) => ({ ...prev, [key]: valor }));
-  }
-
-  const pratosDisponiveis = cardapio
-    ? Object.keys(PRATO_LABELS).filter((k) => cardapio[k])
-    : [];
-
-  const todasNotasPreenchidas = criterios.every(({ key }) => notas[key] > 0);
-  const podeEnviar = pratosSelecionados.length > 0 && todasNotasPreenchidas;
 
   async function handleEnviar() {
     if (!podeEnviar || !cardapio) return;
     setEnviando(true);
     setErro(null);
     try {
-      const { error } = await supabase.from("avaliacoes").insert({
-        cardapio_id: cardapio.id,
-        turno: turnoAtual,
-        dia: diaAtual,
-        pratos_consumidos: pratosSelecionados,
-        nota_sabor: notas.sabor,
-        nota_temperatura: notas.temperatura,
-        nota_saciedade: notas.saciedade,
-        nota_satisfacao: notas.satisfacao,
-      });
+      const { error } = await supabase.from("avaliacoes").insert(
+        pratosSelecionados.map((prato) => ({
+          cardapio_id:      cardapio.id,
+          matricula,
+          turno:            turnoAtual,
+          dia:              diaAtual,
+          data:             dataHoje,       // <-- agora salva a data real também
+          prato,
+          nota_sabor:       notas.sabor,
+          nota_temperatura: notas.temperatura,
+          nota_saciedade:   notas.saciedade,
+          nota_satisfacao:  notas.satisfacao,
+        }))
+      );
       if (error) throw error;
-      setEnviado(true);
-    } catch (e) {
-      setErro("Erro ao enviar avaliação. Tente novamente.");
+      setAvaliados((prev) => [...prev, ...pratosSelecionados]);
+      setPratosSelecionados([]);
+      setNotas({ sabor: 0, temperatura: 0, saciedade: 0, satisfacao: 0 });
+      setSucesso(true);
+      setTimeout(() => setSucesso(false), 3000);
+    } catch {
+      setErro("Erro ao enviar avaliação.");
     } finally {
       setEnviando(false);
     }
   }
 
-  // ─── Estados de tela ───────────────────────
+  const pratosDisponiveis = cardapio ? Object.keys(PRATO_LABELS).filter((k) => cardapio[k]) : [];
+  const podeEnviar = pratosSelecionados.length > 0 && CRITERIOS.every(({ key }) => notas[key] > 0);
 
-  if (loading) {
-    return (
-      <Layout titulo="Avaliação da Refeição" ativo="avaliar">
-        <div className="flex items-center justify-center h-48 text-gray-400 text-sm">Carregando...</div>
-      </Layout>
-    );
-  }
-
-  if (!turnoAtual) {
-    return (
-      <Layout titulo="Avaliação da Refeição" ativo="avaliar">
-        <div className="bg-white rounded-2xl p-8 shadow-sm text-center space-y-2">
-          <p className="text-2xl">🕐</p>
-          <p className="text-sm font-semibold text-gray-500">Fora do horário de avaliação</p>
-          <p className="text-xs text-gray-400">Avaliações ficam disponíveis durante os turnos de funcionamento do RU.</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!intencaoConfirmada) {
-    return (
-      <Layout titulo="Avaliação da Refeição" ativo="avaliar">
-        <div className="bg-white rounded-2xl p-8 shadow-sm text-center space-y-2">
-          <p className="text-2xl">🍽️</p>
-          <p className="text-sm font-semibold text-gray-500">Sem intenção confirmada</p>
-          <p className="text-xs text-gray-400">
-            Confirme sua presença no {getTurnoLabel(turnoAtual)} antes de avaliar.
-          </p>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!cardapio) {
-    return (
-      <Layout titulo="Avaliação da Refeição" ativo="avaliar">
-        <div className="bg-white rounded-2xl p-8 shadow-sm text-center space-y-2">
-          <p className="text-2xl">📋</p>
-          <p className="text-sm font-semibold text-gray-500">Cardápio não publicado</p>
-          <p className="text-xs text-gray-400">O cardápio de hoje ainda não foi publicado pelo gestor.</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (enviado) {
-    return (
-      <Layout titulo="Avaliação da Refeição" ativo="avaliar">
-        <div className="bg-white rounded-2xl p-8 shadow-sm text-center space-y-3">
-          <p className="text-4xl">✅</p>
-          <p className="text-lg font-bold" style={{ color: "#166534" }}>Avaliação enviada!</p>
-          <p className="text-sm text-gray-500">Obrigado pelo seu feedback. Ele ajuda a melhorar o cardápio do RU.</p>
-        </div>
-      </Layout>
-    );
-  }
+  if (loading) return (
+    <Layout titulo="Avaliação da Refeição" ativo="avaliar">
+      <div className="flex items-center justify-center h-48 text-gray-400 text-sm">Carregando...</div>
+    </Layout>
+  );
 
   return (
     <Layout titulo="Avaliação da Refeição" ativo="avaliar">
       <div className="space-y-4">
 
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>
-            O que achou do {getTurnoLabel(turnoAtual)}?
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Seu feedback é anônimo e ajuda a equipe de nutrição a melhorar o cardápio diariamente.
-          </p>
-        </div>
+        {!turnoAtual && <Bloqueio emoji="🕐" titulo="Fora do horário de avaliação" descricao="Avaliações ficam disponíveis durante o funcionamento do RU." />}
+        {turnoAtual && !intencaoConfirmada && <Bloqueio emoji="🍽️" titulo="Sem intenção confirmada" descricao={`Confirme presença no ${turnoLabel(turnoAtual)} antes de avaliar.`} />}
+        {turnoAtual && intencaoConfirmada && !cardapio && <Bloqueio emoji="📋" titulo="Cardápio não publicado" descricao="O gestor ainda não publicou o cardápio de hoje." />}
 
-        {/* Seleção de pratos */}
-        <div className="bg-white rounded-2xl px-4 py-4 shadow-sm space-y-3">
-          <p className="text-sm font-semibold text-gray-900">O que você comeu hoje?</p>
-          <div className="space-y-2">
-            {pratosDisponiveis.map((prato) => {
-              const selecionado = pratosSelecionados.includes(prato);
-              return (
-                <button
-                  key={prato}
-                  onClick={() => togglePrato(prato)}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl border transition-all"
-                  style={{
-                    borderColor: selecionado ? "#166534" : "#e5e7eb",
-                    backgroundColor: selecionado ? "#f0fdf4" : "#fafafa",
-                  }}
-                >
-                  {selecionado
-                    ? <CheckSquare size={20} style={{ color: "#166534" }} />
-                    : <Square size={20} className="text-gray-300" />}
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-gray-800">{PRATO_LABELS[prato]}</p>
-                    <p className="text-xs text-gray-400">{cardapio[prato]}</p>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Critérios */}
-        <div className="space-y-3">
-          {criterios.map(({ key, label }) => (
-            <div key={key} className="bg-white rounded-2xl px-4 py-4 shadow-sm">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-semibold text-gray-900">{label}</p>
-                <p className="text-sm font-bold text-orange-500">
-                  {notas[key] > 0 ? `${notas[key]} / 5` : "- / 5"}
-                </p>
+        {turnoAtual && intencaoConfirmada && cardapio && (
+          <>
+            {sucesso && (
+              <div className="flex items-center gap-2 px-4 py-3 rounded-2xl text-white text-sm font-semibold shadow-sm" style={{ backgroundColor: "#166534" }}>
+                <CheckCircle size={16} /> Avaliação enviada com sucesso!
               </div>
-              <div className="flex gap-2">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <button key={i} onClick={() => setNota(key, i)}>
-                    <Star
-                      size={28}
-                      className={i <= notas[key] ? "text-orange-500" : "text-gray-200"}
-                      fill={i <= notas[key] ? "#f97316" : "#e5e7eb"}
-                    />
-                  </button>
-                ))}
+            )}
+
+            <div>
+              <h1 className="text-2xl font-bold" style={{ color: "#166534" }}>O que achou do {turnoLabel(turnoAtual)}?</h1>
+              <p className="text-sm text-gray-500 mt-1">Seu feedback ajuda a equipe do RU a melhorar o cardápio.</p>
+            </div>
+
+            <div className="bg-white rounded-2xl px-4 py-4 shadow-sm space-y-3">
+              <p className="text-sm font-semibold text-gray-900">Escolha os pratos para avaliar</p>
+              <div className="space-y-2">
+                {pratosDisponiveis.map((prato) => {
+                  const selecionado = pratosSelecionados.includes(prato);
+                  const jaAvaliado  = avaliados.includes(prato);
+                  return (
+                    <button key={prato} disabled={jaAvaliado}
+                      onClick={() => setPratosSelecionados((prev) => prev.includes(prato) ? prev.filter((p) => p !== prato) : [...prev, prato])}
+                      className="w-full flex items-center gap-3 p-3 rounded-xl border transition-all disabled:opacity-70"
+                      style={{ borderColor: selecionado ? "#166534" : "#e5e7eb", backgroundColor: jaAvaliado ? "#f3f4f6" : selecionado ? "#f0fdf4" : "#fafafa" }}
+                    >
+                      {selecionado
+                        ? <CheckSquare size={20} style={{ color: "#166534" }} />
+                        : <Square size={20} className={jaAvaliado ? "text-green-600" : "text-gray-300"} />}
+                      <div className="flex-1 text-left">
+                        <p className="text-sm font-medium text-gray-800">{PRATO_LABELS[prato]}</p>
+                        <p className="text-xs text-gray-400">{cardapio[prato]}</p>
+                      </div>
+                      {jaAvaliado && <span className="bg-green-100 text-green-700 text-xs font-semibold px-2 py-1 rounded-full">Avaliado</span>}
+                    </button>
+                  );
+                })}
               </div>
             </div>
-          ))}
-        </div>
 
-        {erro && <p className="text-center text-sm text-red-500">{erro}</p>}
+            <div className="space-y-3">
+              {CRITERIOS.map(({ key, label }) => (
+                <div key={key} className="bg-white rounded-2xl px-4 py-4 shadow-sm">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-sm font-semibold text-gray-900">{label}</p>
+                    <p className="text-sm font-bold text-orange-500">{notas[key] > 0 ? `${notas[key]} / 5` : "- / 5"}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <button key={i} onClick={() => setNotas((prev) => ({ ...prev, [key]: i }))}>
+                        <Star size={28} className={i <= notas[key] ? "text-orange-500" : "text-gray-200"} fill={i <= notas[key] ? "#f97316" : "#e5e7eb"} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
 
-        <button
-          onClick={handleEnviar}
-          disabled={!podeEnviar || enviando}
-          className="w-full py-4 rounded-2xl text-white font-bold text-base transition-opacity"
-          style={{
-            backgroundColor: "#166534",
-            opacity: podeEnviar && !enviando ? 1 : 0.4,
-          }}
-        >
-          {enviando ? "Enviando..." : "Enviar Avaliação"}
-        </button>
+            {erro && <p className="text-center text-sm text-red-500">{erro}</p>}
 
-        <p className="text-center text-xs text-gray-400">
-          Você pode avaliar durante o horário de funcionamento do turno.
-        </p>
+            <button onClick={handleEnviar} disabled={!podeEnviar || enviando}
+              className="w-full py-4 rounded-2xl text-white font-bold text-base transition-opacity"
+              style={{ backgroundColor: "#166534", opacity: podeEnviar && !enviando ? 1 : 0.4 }}
+            >
+              {enviando ? "Enviando..." : "Enviar Avaliação"}
+            </button>
 
+            <p className="text-center text-xs text-gray-400">Cada prato pode ser avaliado apenas uma vez por turno.</p>
+          </>
+        )}
       </div>
     </Layout>
   );
